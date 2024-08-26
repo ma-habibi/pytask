@@ -12,8 +12,6 @@ Desc. :
     the script should:
 ********************************************"""
 
-import csv
-import json
 import sys # For argv
 import requests
 
