@@ -21,8 +21,6 @@ TODO:
 
 from flask import Flask, request, jsonify
 from flask_restful import Resource, Api
-
-
 import requests
 import pandas as pd
 
@@ -170,10 +168,9 @@ class Vehicles(Resource):
                 file.filename)
 
         # merge and filter
-        self.__process(df_api, df_req)
+        df_res = self.__process(df_api, df_req)
 
-        print(df_api.head())
-        return 201
+        return df_res
 
 api.add_resource(Vehicles, '/vehicles') # , '/<string:vid>')
 
