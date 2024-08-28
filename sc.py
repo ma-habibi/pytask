@@ -12,12 +12,18 @@ Desc. :
     the script should:
 ********************************************"""
 
+# Built-ins
 import sys # For argv
+from io import BytesIO
+
+# Third-party
 import requests
-
 import pandas as pd
+from openpyxl import load_workbook
+from openpyxl.styles import PatternFill
 
-def get_access_token() -> str:
+
+def get_access_token():
     """Get access token for
     the API
     """
@@ -48,9 +54,9 @@ def server(csvpath):
     returns them in an appropriate
     data-structure
 
-    Takes path to a csv: reqpath, 
-    makes a reqdf data frame that, 
-    gets and reads resources into 
+    Takes path to a csv: reqpath,
+    makes a reqdf data frame that,
+    gets and reads resources into
     apidf. merges into resdf, applies
     filtering and returns resdf in json.
     """
@@ -66,11 +72,10 @@ def server(csvpath):
     # Request the resources
     acctoken = get_access_token()
 
-
     res = (requests.get(
             "https://api.baubuddy.de"
             "/dev/index.php/v1/vehicles"
-            "/select/active", 
+            "/select/active",
             headers = {
                 "Authorization":
                 f"Bearer {acctoken}"}))
@@ -94,13 +99,11 @@ def server(csvpath):
                     resdf['labelIds_res'])
     resdf = resdf.drop(
             columns=['labelIds_res'])
-    print(resdf[["labelIds", "hu"]].head())
-    print(resdf["labelIds"].unique())
 
     # For each labelId in the
     # vehicle's JSON array
     # labelIds resolve its colorCode
-    for _, row in resdf.iterrows():
+    for i, row in resdf.iterrows():
         # Skip NaN
         if pd.notna(row['labelIds']):
             res = requests.get(
@@ -115,18 +118,62 @@ def server(csvpath):
             if res.status_code != 200:
                 continue
 
-            # add a column colorCode
-            # to resdf
-            resdf["colorCode"] =\
-            res.json()[0]["colorCode"]
-
-    print(resdf["colorCode"].unique())
-
-    sys.exit(0)
+            # set colorCode
+            resdf.at[i, 'labelIds']=\
+            res.json()[0]['colorCode']
 
     # return data-structure in JSON format
     return resdf.to_json()
 
+
+def df_towb(df):
+    """ writes a pandas
+    dataframe df into a
+    openpyxl's workbook
+    in memory.
+    """
+
+    xlbuf = BytesIO() # create buffer
+    df.to_excel(xlbuf, index=False) # out xlsx
+    xlbuf.seek(0) # seek begin
+    wb = load_workbook(xlbuf) # load wb.
+    return wb
+
+def tint_labelids(ws):
+    """ If labelIds are given 
+    and at least one colorCode 
+    could be resolved, use the 
+    first colorCode to tint the 
+    cell's text 
+    (if labelIds is given in -k)
+
+    Given a openpyxl.workbook wb
+    Paint the labelId cell to the
+    color assiciated with it and 
+    return the new painted workbook.
+    """
+
+    i = 2 # skip the keys
+    j = 0
+    while i < ws.max_row and j < ws.max_column:
+        if ws[1][j].value != 'labelIds':
+            j += 1
+            continue
+
+        color = ws[i][j].value
+        if color is not None:
+            # delete hashtag
+            color = str(color)[1:]
+
+            fill = PatternFill(
+                    start_color=color,
+                    end_color=color,
+                    fill_type="solid")
+            ws[i][j].fill = fill
+        
+        i += 1
+
+    return ws
 
 def client():
     """Transmits a CSV to
@@ -136,13 +183,62 @@ def client():
     generates an Excel-File
     taking the input parameters
     into account.
+
+    TODO:
+        [ ] color cells
+        [ ] seperate files
+        [ ] after server listening
+            make calls
     """
 
     # Call server and get the merged
     # data in json
-    resdf = server("vehicles.csv")
+    df = pd.read_json(
+            server("vehicles.csv"))
 
-    print(resdf.head())
+    # Rows are sorted by response
+    # field gruppe
+    df = df.sort_values(by=["gruppe"])
+
+    # Columns always contain rnr field
+    cols = ['rnr']
+
+    # Only keys that match the input
+    # arguments are considered as
+    # additional columns
+    for arg in sys.argv[1:]:
+        # Check for valid input:
+        # O(N) lookup OK since
+        # n is samll for columns
+        if arg not in df.columns:
+            print(f"no column matching the"
+                  f"{arg}, will leave out")
+            continue
+        cols.append(arg)
+
+    df = df[[col for col in cols]]
+    del cols # TODO: later after restapi implementation handle the scope
+
+    wb = df_towb(df)
+    del df
+
+    # Get worksheet
+    ws = wb["Sheet1"]
+
+    # Tint cell with the resolved
+    # label id value
+    ws = tint_labelids(ws)
+
+    wb.save("out.xlsx")
+    print("FINISHED")
+    sys.exit(0)
+
+    sys.exit(0)
+
+    # Save the workbook
+    wb.save("out.xlsx")
+    print("FINISHED")
+    sys.exit(0)
 
     # Take an input parameter -k/--keys that can receive an arbitrary amount of string arguments
 
@@ -152,47 +248,15 @@ def client():
 
     # Convert the servers response into an excel file that contains all resources and make sure that:
 
-        # Rows are sorted by response field gruppe
-        # Columns always contain rnr field
-        # Only keys that match the input arguments are considered as additional columns (i.e. when the script is invoked with kurzname and info, print two extra columns)
-        # If labelIds are given and at least one colorCode could be resolved, use the first colorCode to tint the cell's text (if labelIds is given in -k)
-        # If the -c flag is True, color each row depending on the following logic:
-            # If hu is not older than 3 months --> green (#007500)
-            # If hu is not older than 12 months --> orange (#FFA500)
-            # If hu is older than 12 months --> red (#b30000)
+    # TODO:
+        # [*] Rows are sorted by response field gruppe [*]
+        # [*] Columns always contain rnr field [*]
+        # [*] Only keys that match the input arguments are considered as additional columns (i.e. when the script is invoked with kurzname and info, print two extra columns)[*]
+        # [*] If labelIds are given and at least one colorCode could be resolved, use the first colorCode to tint the cell's text (if labelIds is given in -k)
+        # [ ] If the -c flag is True, color each row depending on the following logic:
+        # [ ]   # If hu is not older than 3 months --> green (#007500)
+        # [ ]   # If hu is not older than 12 months --> orange (#FFA500)
+        # [ ]   # If hu is older than 12 months --> red (#b30000)
         # The file should be named vehicles_{current_date_iso_formatted}.xlsx
 
 client()
-
-    # # Rows are sorted by response field gruppe
-    # mrgdf.sort_values(by="gruppe")
-    # # Columns always contain rnr field
-    # cols = ['rnr']
-    # # Only keys that match the input arguments are considered as additional columns
-    # for arg in sys.argv[1:]: # slice to skip .py file
-    #     # Check for valid input:
-    #     # O(N) lookup OK since
-    #     # n is samll for columns
-    #     if arg not in mrgdf.columns:
-    #         print(f"no column matching the {arg}, will leave out")
-    #         continue
-    #     cols.append(arg)
-    #
-    # # If labelIds are given and at least one colorCode
-    # # could be resolved, use the first colorCode to tint
-    # # the cell's text (if labelIds is given in -k)
-    #
-    # # Out
-    # mrgdf = mrgdf[[col for col in cols]]
-    #
-    # mrgdf = mrgdf[mrgdf["labelIds"].notna()]
-    #
-    # # TMP
-    # print(mrgdf.head())
-
-    # mrgdf.to_excel("out.xlsx")
-
-    # with open('vehicles.csv', 'r') as f:
-    #     reader = csv.DictReader(f, delimiter=';')
-    #     jsondata = json.dumps(list(reader), ensure_ascii=False, indent=4)
-    # print(jsondata)
