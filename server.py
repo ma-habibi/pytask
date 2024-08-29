@@ -1,23 +1,22 @@
-"""
+"""********************************************
 File: server.py
 Author: Metflekx
 
 Desc. :
 
 TODO:
-
-    [ ] Make It Work--------------------
+    [*] Make It Work--------------------
     [*] Make a restAPI that takes csv
     [*] Make server work.
-    [ ] Merge branch restapi with master
-    [ ] Make client work.
-    [ ] Fix File structure.
+    [*] Merge branch restapi with master
+    [*] Make client work.
     
     [ ] Improve-------------------------
+    [ ] Fix File structure.
     [ ] Improve Error Handling.
     [ ] Write tests.
     [ ] Improve Lookups.
-"""
+********************************************"""
 
 from flask import Flask, request, jsonify
 from flask_restful import Resource, Api
@@ -28,7 +27,6 @@ import pandas as pd
 # Init
 app = Flask(__name__)
 api = Api(app)
-
 
 class Vehicles(Resource):
     """
@@ -74,12 +72,6 @@ class Vehicles(Resource):
         apidf. merges into resdf, applies
         filtering and returns resdf in json.
         """
-    
-        # TODO:
-        # [ ] make sure the result is distinct
-        # [ ] REST-API (e.g. FastAPI, Flask, Django …)
-                # offering a POST Call which accepts a
-                # transmitted CSV containing vehicle information
     
         # Request the resources
         res = (requests.get(
@@ -172,8 +164,8 @@ class Vehicles(Resource):
 
         return df_res
 
-api.add_resource(Vehicles, '/vehicles') # , '/<string:vid>')
 
+api.add_resource(Vehicles, '/vehicles')
 
 if __name__ == '__main__':
     app.run(debug=True)

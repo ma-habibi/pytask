@@ -13,9 +13,9 @@ Desc. :
 ********************************************"""
 
 # Built-ins
-import sys # For argv
 from io import BytesIO
 from datetime import date # for today
+import argparse
 
 # Third-party
 import requests
@@ -27,7 +27,6 @@ from openpyxl.styles import PatternFill
 GREEN = "007500"
 ORANGE = "FFA500"
 RED = "b30000"
-
 
 def df_towb(df):
     """ writes a pandas
@@ -147,46 +146,57 @@ def client():
     generates an Excel-File
     taking the input parameters
     into account.
-
-    TODO:
-        [*] color cells
-        [ ] handle args
-        [*] seperate files
-        [*] after server listening
-            make calls
     """
 
-    # Call server and get the merged
-    # data in json
-    # curl -F "file=@./vehicles.csv" http://127.0.0.1:5000/vehicles -X POST
+    # handle args
+    parser = argparse.ArgumentParser(
+            description=\
+                    "VERO pytask:"
+                    " write vehicles data"
+                    " to a xlsx file.")
+
+    # handle -k flag
+    # Columns always contain rnr field
+    cols = ["rnr"]
+    parser.add_argument(
+            "-k",
+            "--keys",
+            nargs="+",
+            help="Columns to write"
+            " out : arbitary amount"
+            " of strings")
+
+    parser.add_argument(
+            "-c",
+            "--colored",
+            action="store_true",
+            help="Disable colord output.",
+            default=False)
+
+    args = parser.parse_args()
+
+    # Call server and retrieve json data
     response = requests.post(
       url="http://127.0.0.1:5000/vehicles",
       files={"file": open("vehicles.csv", "rb")})
 
     df = pd.read_json(response.json())
 
-    # handle -k flag
-    # Columns always contain rnr field
-    cols = ["rnr"]
-    # Only keys that match the input
-    # arguments are considered as
     # additional columns
-    for arg in sys.argv[1:]:
-        # Check for valid input:
-        # O(N) lookup OK since
-        # n is samll for columns
+    for arg in args.keys:
+        # Check input in O(n)
         if arg not in df.columns:
             print(f"no column matching the"
                   f"{arg}, will leave out")
             continue
         cols.append(arg)
 
-    # -c flag
-    get_colors(df)
-    cols.append("colortmp")
+    # Write colors to a tmp. column.
+    if (args.colored):
+        get_colors(df)
+        cols.append("colortmp")
 
-    # Rows are sorted by response
-    # field gruppe
+    # Sort byt gruppe
     df = df.sort_values(by=["gruppe"])
 
     df = df[[col for col in cols]]
@@ -203,20 +213,14 @@ def client():
     tint_labelids(ws)
 
     # Paint each row for colored
-    ws.delete_cols(
-            paint_rows(ws), amount=1)
+    if (args.colored):
+        ws.delete_cols(
+                paint_rows(ws), 
+                amount=1)
 
     # output
     wb.save(f"vehicles_"
             f"{str(date.today())}"
             ".xlsx")
-
-    sys.exit(0)
-
-    # [ ] Take an input parameter -k/--keys that can receive an arbitrary amount of string arguments
-    # [ ] Take an input parameter -c/--colored that receives a boolean flag and defaults to True
-    # [ ] Transmit CSV containing vehicle information to the POST Call of the server (example data: vehicles.csv)
-    # [ ] Convert the servers response into an excel file that contains all resources and make sure that:
-    # [ ] The file should be named vehicles_{current_date_iso_formatted}.xlsx
 
 client()
