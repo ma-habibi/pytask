@@ -3,19 +3,19 @@ File: server.py
 Author: Metflekx
 
 Desc. :
+    Offer a restfull API that listens for a 
+    POST request on "url/vehicles" which 
+    contains a csv file.
+    Obtains some resources, merges and
+    returns all the data in JSON. 
 
 TODO:
-    [*] Make It Work--------------------
-    [*] Make a restAPI that takes csv
-    [*] Make server work.
-    [*] Merge branch restapi with master
-    [*] Make client work.
-    
     [ ] Improve-------------------------
-    [ ] Fix File structure.
+    [*] Fix Path
+    [ ] Fix File structure (sep. modules)
     [ ] Improve Error Handling.
     [ ] Write tests.
-    [ ] Improve Lookups.
+    [ ] Implement O(1) lookups.
 ********************************************"""
 
 from flask import Flask, request, jsonify
@@ -30,20 +30,19 @@ api = Api(app)
 
 class Vehicles(Resource):
     """
-    This script should offer
-    a REST-API, that accepts a CSV,
-    downloads a certain set of
-    resources, merges them with the
-    CSV, applies filtering, and
-    returns them in an appropriate
-    data-structure.
+    Offers a REST-API.
     """
 
     def __init__(self):
+        """
+        get API access_token
+        """
+
         self.access_token = self.__get_access_token()
 
     def __get_access_token(self):
-        """Get access token for
+        """
+        Get access token for
         the API
         """
     
@@ -66,11 +65,8 @@ class Vehicles(Resource):
 
     def __fetch(self):
         """
-        Takes path to a csv: csv_path
-        makes a reqdf data frame that,
-        gets and reads resources into
-        apidf. merges into resdf, applies
-        filtering and returns resdf in json.
+        Gets resources to read into
+        df_api.
         """
     
         # Request the resources
@@ -81,13 +77,9 @@ class Vehicles(Resource):
                 headers = {
                     "Authorization":
                     f"Bearer {self.access_token}"}))
-        apidf = pd.DataFrame(res.json())
-    
-        # Filter out any resources
-        # that do not have a value
-        # set for hu field
-        apidf = apidf[apidf["hu"].notna()]
-        return apidf
+        df_api = pd.DataFrame(res.json())
+
+        return df_api
     
     def __accept(self, csv_content):
         """
@@ -99,30 +91,34 @@ class Vehicles(Resource):
         return pd.read_csv(csv_content, 
                            delimiter=';')
 
+
     def __process(self, df_api, df_req):
         """
-        merges dataframes, apply filters
+        Merges dataframes, apply filters
         and returns in JSON.
         """
     
         # merge req and res data
-        df_res = pd.merge(df_req, df_api,
+        df = pd.merge(df_req, df_api,
                          on="kurzname",
                          how="outer",
                          validate="one_to_many",
                          suffixes=("", "_res"))
+
+        # Leave out any row without 'hu'
+        df = df[df["hu"].notna()]
     
         # Combine labelId and LabelId_res
-        df_res['labelIds'] = df_res[
+        df['labelIds'] = df[
                 'labelIds'].combine_first(
-                        df_res['labelIds_res'])
-        df_res = df_res.drop(
+                        df['labelIds_res'])
+        df = df.drop(
                 columns=['labelIds_res'])
     
         # For each labelId in the
         # vehicle's JSON array
         # labelIds resolve its colorCode
-        for i, row in df_res.iterrows():
+        for i, row in df.iterrows():
             # Skip NaN
             if pd.notna(row["labelIds"]):
                 res = requests.get(
@@ -138,16 +134,20 @@ class Vehicles(Resource):
                     continue
     
                 # set colorCode
-                df_res.at[i, "labelIds"]=\
+                df.at[i, "labelIds"]=\
                 res.json()[0]["colorCode"]
     
         # return data-structure in JSON format
-        return df_res.to_json()
+        return df.to_json()
     
     def post(self):
-        """ CREATE A BOOK
-            Takes a form and creates
-            a book in the database.
+        """
+        Listens for a POST request
+        and accepts a csv,
+        downloads a certain set of
+        resources, merges them with the
+        csv, applies filtering, and
+        returns them in Json.
         """
 
         file = request.files["file"]

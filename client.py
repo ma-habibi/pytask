@@ -1,15 +1,12 @@
 """********************************************
-File: server-client.py
-Author: Metflekx
+File: client.py
+Author: Mahdi Habibi
 
 Desc. :
-    Write two python scripts that
-    have to achieve the common goal
-    to downloads a certain set of resources
-    , merges them with CSV-transmitted
-    resources, and converts them to a
-    formatted excel file. In particular,
-    the script should:
+    Obtains merged data by making a POST call 
+    to server.py containing a csv file. 
+    Then applies filters to the data and output
+    as specified in the task.
 ********************************************"""
 
 # Built-ins
@@ -29,7 +26,8 @@ ORANGE = "FFA500"
 RED = "b30000"
 
 def df_towb(df):
-    """ writes a pandas
+    """
+    Writes a pandas
     dataframe df into a
     openpyxl's workbook
     in memory.
@@ -41,39 +39,8 @@ def df_towb(df):
     wb = load_workbook(xlbuf) # load wb.
     return wb
 
-def get_colors(df):
-    """ Make a new column colortmp
-    in df Obtain the row color
-    according to the hu value.
-    """
-
-    df["colortmp"] = None
-    today = int(str(
-        date.today()).replace(
-            "-", ""))
-    twelve_m = today - 10000
-    three_m = today - 300
-    for i, huval in enumerate(df["hu"]):
-        if isinstance(huval, str):
-            huval = int(
-                    huval.replace(
-                        "-", ""))
-            if huval < twelve_m:
-                if huval < three_m:
-                    df.at[i, "colortmp"] = GREEN
-                    continue
-                df.at[i, "colortmp"] = ORANGE
-                continue
-            df.at[i, "colortmp"] = RED
-
 def tint_labelids(ws):
-    """ If labelIds are given
-    and at least one colorCode
-    could be resolved, use the
-    first colorCode to tint the
-    cell's text
-    (if labelIds is given in -k)
-
+    """ 
     Given a openpyxl.workbook wb
     Paint the labelId cell to the
     color assiciated with it and
@@ -101,63 +68,92 @@ def tint_labelids(ws):
 
         i += 1
 
-def paint_rows(ws) -> int:
-    """ Use the values stored
-    in colortmp, to paint each
-    row according to hu value.
-    returns the index at which
-    the colortmp exist.
-    in a call to paint_rows the
-    return value must be used
-    to delete tmp column.
+def hu_to_color(entry):
+    """
+    Compare dates and return
+    the proper color, regarding
+    speciefications of task.
+
+    P.N:
+    We could've use any api to
+    compare date types, but it
+    doesn't hurt to write a
+    little algorithm!
     """
 
-    # find the colortmp index
-    cti = 0
-    while cti < ws.max_column and\
-    ws[1][cti].value != "colortmp":
-        cti += 1
+    today = int(str(
+        date.today()).replace(
+            "-", ""))
+    twelve_m = today - 10000
+    three_m = today - 300
 
-    i = 2
-    while i < ws.max_row + 1:
-        # Get color
-        color = ws[i][cti].value
-        if isinstance(color, str):
-            # Paint row
-            j = 0
-            fill = PatternFill(
-                    start_color=color,
-                    end_color=color,
-                    fill_type="solid")
-            while j < ws.max_column:
-                ws[i][j].fill = fill
-                j += 1
+    # parse hu date
+    hu = entry.value
+    hu = int(hu.replace("-", ""))
 
-        i += 1
+    if hu > twelve_m:
+        if hu > three_m:
+            return GREEN
+        return ORANGE
+    return RED
 
-    # return index of tmp col
-    return cti + 1
+def paint_row(row, color):
+    """
+    Paints all cells of a row.
+    """
+
+    # Obtain fill
+    fill = PatternFill(
+            start_color=color,
+            end_color=color,
+            fill_type="solid")
+
+    # Apply
+    for cell in row:
+        cell.fill = fill
+
+def paint_rows(ws):
+    """
+    Use the hu values to color
+    each row, as speciefied in
+    the task.
+    """
+
+    # Index of 'hu' column
+    hu_i = 0
+    while hu_i < ws.max_column and\
+    ws[1][hu_i].value != "hu":
+        hu_i += 1
+
+    # Iterate, evaluate and paint
+    for row in ws.iter_rows(min_row=2):
+        entry = row[hu_i]
+        paint_row(row, 
+                  hu_to_color(entry))
 
 def client():
-    """Transmits a CSV to
-    a REST-API
-    (s. Server-section below),
+    """
+    Transmits a CSV to
+    a REST-API (s. Server-section below),
     handles the response and
     generates an Excel-File
     taking the input parameters
     into account.
     """
 
-    # handle args
+    # Handle args
     parser = argparse.ArgumentParser(
             description=\
-                    "VERO pytask:"
+                    "client.py(VERO pytask):"
                     " write vehicles data"
                     " to a xlsx file.")
 
-    # handle -k flag
-    # Columns always contain rnr field
+    # Add first
+    parser.add_argument("filename")
+
+    # kolumns always contain rnr field
     cols = ["rnr"]
+    # Handle -k flag
     parser.add_argument(
             "-k",
             "--keys",
@@ -178,11 +174,10 @@ def client():
     # Call server and retrieve json data
     response = requests.post(
       url="http://127.0.0.1:5000/vehicles",
-      files={"file": open("vehicles.csv", "rb")})
-
+      files={"file": open(args.filename, "rb")})
     df = pd.read_json(response.json())
 
-    # additional columns
+    # Additional columns
     for arg in args.keys:
         # Check input in O(n)
         if arg not in df.columns:
@@ -191,21 +186,16 @@ def client():
             continue
         cols.append(arg)
 
-    # Write colors to a tmp. column.
-    if (args.colored):
-        get_colors(df)
-        cols.append("colortmp")
-
-    # Sort byt gruppe
+    # Sort by gruppe
     df = df.sort_values(by=["gruppe"])
 
+    # Obtain df with additional columns
     df = df[[col for col in cols]]
     del cols
 
+    # Get openpyxl Workbook for colors
     wb = df_towb(df)
     del df
-
-    # Get worksheet
     ws = wb["Sheet1"]
 
     # Tint cell with the resolved
@@ -214,11 +204,9 @@ def client():
 
     # Paint each row for colored
     if (args.colored):
-        ws.delete_cols(
-                paint_rows(ws), 
-                amount=1)
+        paint_rows(ws)
 
-    # output
+    # Output
     wb.save(f"vehicles_"
             f"{str(date.today())}"
             ".xlsx")
