@@ -190,4 +190,4 @@ class Vehicles(Resource):
 api.add_resource(Vehicles, '/vehicles')
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run()
