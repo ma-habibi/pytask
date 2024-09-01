@@ -1,4 +1,4 @@
-# Authors's Notes
+# Author's Notes
 
 To whom it may concern,
 
