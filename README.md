@@ -20,7 +20,7 @@ python -m venv venv
 ```
 
 ```sh
-source venv/bin/activate && pip install requirement.txt
+source venv/bin/activate && pip install -r requirement.txt
 ```
 
 #### Get the server running.
