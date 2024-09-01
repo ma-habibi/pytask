@@ -13,6 +13,8 @@ Desc. :
 from io import BytesIO
 from datetime import date # for today
 import argparse
+import sys
+import os
 
 # Third-party
 import requests
@@ -121,7 +123,7 @@ def paint_rows(ws):
 
     # Index of 'hu' column
     hu_i = 0
-    while hu_i < ws.max_column and\
+    while hu_i < ws.max_column - 1 and\
     ws[1][hu_i].value != "hu":
         hu_i += 1
 
@@ -171,23 +173,46 @@ def client():
 
     args = parser.parse_args()
 
-    # Call server and retrieve json data
-    response = requests.post(
-      url="http://127.0.0.1:5000/vehicles",
-      files={"file": open(args.filename, "rb")})
-    df = pd.read_json(response.json())
+    # POST data to server and retrieve merged data in json
+    try:
+        with open(args.filename, "rb") as file:
+            response = requests.post(
+              url="http://127.0.0.1:5000/vehicles",
+              files={"file": file})
+
+        # Check HTTP error
+        response.raise_for_status()
+        # Put data in a pandas df
+        df = pd.read_json(response.json())
+
+    except requests.exceptions.RequestException as e:
+        print(f"ERROR:Client Failed to fetch data: {e}")
+        sys.exit(1)
+    except ValueError as e:
+        print(f"ERROR:Client Failed to decode json: {e}")
+        sys.exit(1)
 
     # Additional columns
-    for arg in args.keys:
-        # Check input in O(n)
-        if arg not in df.columns:
-            print(f"no column matching the"
-                  f"{arg}, will leave out")
-            continue
-        cols.append(arg)
+    if args.keys:
+        for arg in args.keys:
+            # Check input in O(n)
+            if arg not in df.columns:
+                print(f"no column matching the"
+                      f"{arg}, will leave out")
+                continue
+            cols.append(arg)
 
+    # Check if hu is given
+    if args.colored and "hu" not in cols:
+        cols.append("hu")
+        print("Warning: added 'hu' for colored output.")
+        
     # Sort by gruppe
-    df = df.sort_values(by=["gruppe"])
+    if "gruppe" not in cols:
+        print(f"Warning: unsorted output, ask for 'gruppe'"
+        " column for sorted output.")
+    else:
+        df = df.sort_values(by=["gruppe"])
 
     # Obtain df with additional columns
     df = df[[col for col in cols]]

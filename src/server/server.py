@@ -9,13 +9,7 @@ Desc. :
     Obtains some resources, merges and
     returns all the data in JSON. 
 
-TODO:
-    [*] Fix merge
-    [ ] Improve-------------------------
-    [ ] Fix File structure (sep. modules)
-    [ ] Write Test
-    [ ] Error Handling.
-    [ ] Add notes to readme.
+Improve:
     [ ] Implement O(1) lookups.
 ********************************************"""
 
@@ -47,22 +41,27 @@ class Vehicles(Resource):
         the API
         """
     
-        url = "https://api.baubuddy.de/index.php/login"
-        payload = {
-            "username": "365",
-            "password": "1"
-        }
-        headers = {
-            "Authorization":
-              "Basic QVBJX0V4cGxvcmVyOjEyMzQ1NmlzQUxhbWVQYXNz",
-            "Content-Type":
-              "application/json"
-        }
-        res = requests.request(
-          "POST", url,
-          json=payload,
-          headers=headers)
-        return res.json()['oauth']['access_token']
+        try:
+            url = "https://api.baubuddy.de/index.php/login"
+            payload = {
+                "username": "365",
+                "password": "1"
+            }
+            headers = {
+                "Authorization":
+                  "Basic QVBJX0V4cGxvcmVyOjEyMzQ1NmlzQUxhbWVQYXNz",
+                "Content-Type":
+                  "application/json"
+            }
+            res = requests.request(
+              "POST", url,
+              json=payload,
+              headers=headers)
+            return res.json()['oauth']['access_token']
+
+        except requests.RequestException as e:
+            print(F"ERROR: server failed fetching access token: {e}")
+            return None
 
     def __fetch(self):
         """
@@ -90,7 +89,7 @@ class Vehicles(Resource):
         and returns the df.
         """
 
-        return pd.read_csv(csv_content, 
+        return pd.read_csv(csv_content,
                            delimiter=';')
 
     @staticmethod
@@ -168,6 +167,12 @@ class Vehicles(Resource):
         """
 
         file = request.files["file"]
+        if file is None:
+            return jsonify(
+                    {"Error": "No such file"}), 400
+        if not file.filename.endswith(".csv"):
+            return jsonify(
+                    {"Error": "file must end with '.csv'"}), 400
 
         # fetch
         df_api = self.__fetch()

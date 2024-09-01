@@ -1,6 +1,5 @@
 import sys
 import os
-import unittest
 
 sys.path.insert(0, 
                 os.path.abspath(
@@ -16,4 +15,3 @@ def test():
 
 if __name__ == "__main__":
     test()
-# python test.py ../vehicles.csv -k kurzname fuck info hu labelIds gruppe gruppe_res kurzname_res -c
