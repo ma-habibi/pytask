@@ -15,6 +15,7 @@ Improve:
 
 from flask import Flask, request, jsonify
 from flask_restful import Resource, Api
+from flask_caching import Cache
 import requests
 import pandas as pd
 
@@ -22,6 +23,11 @@ import pandas as pd
 # Init
 app = Flask(__name__)
 api = Api(app)
+
+# Configure Caching
+cache = Cache(app,
+              config={"CACHE_TYPE": "SimpleCache",
+                      "CACHE_DEFAULT_TIMEOUT": 1200})
 
 class Vehicles(Resource):
     """
@@ -35,6 +41,8 @@ class Vehicles(Resource):
 
         self.access_token = self.__get_access_token()
 
+    @cache.cached(timeout=1200, 
+                  key_prefix="access_token")
     def __get_access_token(self):
         """
         Get access token for
@@ -63,6 +71,8 @@ class Vehicles(Resource):
             print(F"ERROR: server failed fetching access token: {e}")
             return None
 
+    @cache.cached(timeout=300, 
+                  key_prefix="vehicles_data")
     def __fetch(self):
         """
         Gets resources to read into
@@ -122,7 +132,7 @@ class Vehicles(Resource):
         # merge req and res data
         df = pd.merge(df_req, df_api,
                          on=["kurzname"],
-                         how="inner",
+                         how="outer",
                          suffixes=("", "_res"))
 
         # Leave out any row without 'hu'
