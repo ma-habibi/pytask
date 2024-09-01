@@ -1,6 +1,6 @@
 """********************************************
 File: server.py
-Author: Metflekx
+Author: Mahdi Habibi
 
 Desc. :
     Offer a restfull API that listens for a 
@@ -10,11 +10,12 @@ Desc. :
     returns all the data in JSON. 
 
 TODO:
+    [*] Fix merge
     [ ] Improve-------------------------
-    [*] Fix Path
     [ ] Fix File structure (sep. modules)
-    [ ] Improve Error Handling.
-    [ ] Write tests.
+    [ ] Write Test
+    [ ] Error Handling.
+    [ ] Add notes to readme.
     [ ] Implement O(1) lookups.
 ********************************************"""
 
@@ -81,7 +82,8 @@ class Vehicles(Resource):
 
         return df_api
     
-    def __accept(self, csv_content):
+    @staticmethod
+    def __accept(csv_content):
         """
         Takes in data from the clinet.
         Reads into a pandas dataframe
@@ -91,6 +93,23 @@ class Vehicles(Resource):
         return pd.read_csv(csv_content, 
                            delimiter=';')
 
+    @staticmethod
+    def __combine_overlaps(df, columns_req):
+        """
+        Helps merging overlapping data
+        by combining the duplicate columns.
+        """
+
+        for column in columns_req:
+            duplicate_column = column+"_res"
+            if duplicate_column in df.columns:
+                df[column] = df[
+                        column].combine_first(
+                                df[duplicate_column])
+                df = df.drop(
+                        columns=[duplicate_column])
+
+        return df
 
     def __process(self, df_api, df_req):
         """
@@ -98,23 +117,21 @@ class Vehicles(Resource):
         and returns in JSON.
         """
     
+        # Obtain columns to combine overlaps
+        columns_req = df_req.columns
+
         # merge req and res data
         df = pd.merge(df_req, df_api,
-                         on="kurzname",
-                         how="outer",
-                         validate="one_to_many",
+                         on=["kurzname"],
+                         how="inner",
                          suffixes=("", "_res"))
 
         # Leave out any row without 'hu'
         df = df[df["hu"].notna()]
     
-        # Combine labelId and LabelId_res
-        df['labelIds'] = df[
-                'labelIds'].combine_first(
-                        df['labelIds_res'])
-        df = df.drop(
-                columns=['labelIds_res'])
-    
+        # Combine all overlaping columns
+        df = self.__combine_overlaps(df, columns_req)
+
         # For each labelId in the
         # vehicle's JSON array
         # labelIds resolve its colorCode
